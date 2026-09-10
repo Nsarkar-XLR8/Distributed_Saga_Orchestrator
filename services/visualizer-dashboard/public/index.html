@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Distributed Systems Orchestrator & Live Visualizer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="logo-area">
+        <div class="pulse-indicator online"></div>
+        <div class="brand">
+          <h1>DISTRIBUTED SYSTEMS <span>LAB</span></h1>
+          <p class="subtitle">Saga Orchestrator • Non-Blocking Leased Outbox • CQRS Projections</p>
+        </div>
+      </div>
+      <div class="header-metrics">
+        <div class="metric-card" id="metric-orders">
+          <span class="label">Total Orders</span>
+          <span class="value" id="val-total-orders">0</span>
+        </div>
+        <div class="metric-card" id="metric-state">
+          <span class="label">SSE Connection</span>
+          <span class="value badge-live" id="val-sse-status">Connecting...</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Grid Layout -->
+    <main class="dashboard-grid">
+      
+      <!-- Top Section: Interactive Topology Map -->
+      <section class="card topology-section">
+        <div class="card-header">
+          <h2>⚡ Real-Time System Topology & Event Flow</h2>
+          <span class="hint">Watch events stream across network boundaries in real-time</span>
+        </div>
+        <div class="topology-canvas-container">
+          <div class="node-grid">
+            
+            <!-- Client Ingress Node -->
+            <div class="topology-node" id="node-client">
+              <div class="node-icon">🌐</div>
+              <div class="node-title">Client Ingress</div>
+              <div class="node-port">POST /orders</div>
+              <div class="node-status badge-success">Idempotency Guard</div>
+            </div>
+
+            <!-- Order Service Node -->
+            <div class="topology-node" id="node-order">
+              <div class="node-icon">📦</div>
+              <div class="node-title">Order Service</div>
+              <div class="node-port">Port 3001 (NestJS)</div>
+              <div class="node-desc">Saga Orchestrator & Outbox Poller</div>
+              <div class="node-db">DB: postgres-order (5432)</div>
+            </div>
+
+            <!-- Kafka Message Bus Node -->
+            <div class="topology-node kafka-hub" id="node-kafka">
+              <div class="node-icon">⚡</div>
+              <div class="node-title">Kafka KRaft Broker</div>
+              <div class="node-port">Port 9092 (3 Partitions)</div>
+              <div class="topics-tag-list">
+                <span class="topic-tag">order-events</span>
+                <span class="topic-tag">inventory-events</span>
+                <span class="topic-tag">payment-events</span>
+                <span class="topic-tag dlt">*.DLT</span>
+              </div>
+            </div>
+
+            <!-- Inventory Service Node -->
+            <div class="topology-node" id="node-inventory">
+              <div class="node-icon">🏭</div>
+              <div class="node-title">Inventory Service</div>
+              <div class="node-port">Port 8082 (Spring Boot 3)</div>
+              <div class="node-desc">Pessimistic Locks & Tombstones</div>
+              <div class="node-db">DB: postgres-inventory (5433)</div>
+            </div>
+
+            <!-- Payment Service Node -->
+            <div class="topology-node" id="node-payment">
+              <div class="node-icon">💳</div>
+              <div class="node-title">Payment Service</div>
+              <div class="node-port">Port 8081 (Spring Boot 3)</div>
+              <div class="node-desc">Double-Entry Ledger & Balance Guard</div>
+              <div class="node-db">DB: postgres-payment (5434)</div>
+            </div>
+
+            <!-- CQRS Read Model Node -->
+            <div class="topology-node" id="node-read">
+              <div class="node-icon">📊</div>
+              <div class="node-title">CQRS Read Model</div>
+              <div class="node-port">Port 3002 (NestJS)</div>
+              <div class="node-desc">Unordered Atomic Upsert ($set)</div>
+              <div class="node-db">DB: mongodb-read (27017)</div>
+            </div>
+
+          </div>
+          
+          <div class="live-event-banner" id="live-event-banner">
+            <span class="event-pulse-dot"></span>
+            <span id="live-banner-text">Waiting for events... Submit an order below to initiate a distributed Saga.</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Middle Split: Interactive Action Panel & Active Saga State -->
+      <section class="split-row">
+        
+        <!-- Left: Place Order Form -->
+        <div class="card action-panel">
+          <div class="card-header">
+            <h2>🛒 Place Order (Trigger Saga)</h2>
+          </div>
+          <form id="order-form" class="form-container">
+            <div class="form-group">
+              <label for="input-customer">Customer Account</label>
+              <select id="input-customer" class="form-control">
+                <option value="cust_5001">cust_5001 ($500.00 balance - SAGA SUCCESS)</option>
+                <option value="cust_5002">cust_5002 ($1000.00 balance - SAGA SUCCESS)</option>
+                <option value="cust_insufficient">cust_insufficient ($5.00 balance - SAGA FAILS & COMPENSATES)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="input-product">Product Selection</label>
+              <select id="input-product" class="form-control">
+                <option value="prod_macbook" data-price="150.00">Apple MacBook Pro 16 ($150.00) - 10 in stock</option>
+                <option value="prod_iphone" data-price="99.00">Apple iPhone 15 Pro ($99.00) - 25 in stock</option>
+                <option value="prod_sony_headphones" data-price="45.00">Sony WH-1000XM5 ($45.00) - 50 in stock</option>
+              </select>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="input-quantity">Quantity</label>
+                <input type="number" id="input-quantity" class="form-control" value="1" min="1" max="100">
+              </div>
+              <div class="form-group flex-2">
+                <label for="input-idempotency">Idempotency-Key</label>
+                <div class="input-with-action">
+                  <input type="text" id="input-idempotency" class="form-control font-mono" placeholder="idem_uuid...">
+                  <button type="button" id="btn-regen-key" class="btn btn-secondary btn-sm" title="Generate New UUID">🎲</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary" id="btn-submit-order">
+                <span>⚡ Execute Saga Checkout</span>
+              </button>
+              <button type="button" class="btn btn-warning" id="btn-duplicate-order" title="Submit identical Idempotency-Key to test deduplication">
+                <span>🔁 Duplicate Request Test</span>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Right: Chaos Engineering Control Center -->
+        <div class="card chaos-panel">
+          <div class="card-header">
+            <h2>🧪 1-Click Chaos Lab</h2>
+            <span class="hint">Inject faults & test distributed resilience</span>
+          </div>
+          <div class="chaos-button-grid">
+            <button class="btn btn-chaos" id="btn-chaos-concurrency" onclick="runChaosHighConcurrency()">
+              <span class="chaos-icon">⚡</span>
+              <div class="chaos-info">
+                <strong>High-Concurrency Race</strong>
+                <small>50 parallel checkouts against 1 stock unit</small>
+              </div>
+            </button>
+
+            <button class="btn btn-chaos" id="btn-chaos-inversion" onclick="runChaosInversionGuard()">
+              <span class="chaos-icon">🛡️</span>
+              <div class="chaos-info">
+                <strong>Compensation Inversion</strong>
+                <small>Release stock BEFORE reserve arrives (Tombstone test)</small>
+              </div>
+            </button>
+
+            <button class="btn btn-chaos" id="btn-chaos-dedup" onclick="runChaosDuplicateReplay()">
+              <span class="chaos-icon">🔁</span>
+              <div class="chaos-info">
+                <strong>Duplicate Event Replay</strong>
+                <small>Replay 5x identical PaymentCapturedEvents</small>
+              </div>
+            </button>
+
+            <button class="btn btn-chaos" id="btn-chaos-timeout" onclick="runChaosTimeoutRecovery()">
+              <span class="chaos-icon">⏳</span>
+              <div class="chaos-info">
+                <strong>Saga Timeout Recovery</strong>
+                <small>Dead Man's Switch poller auto-cancels hung orders</small>
+              </div>
+            </button>
+          </div>
+          <div class="chaos-output-box" id="chaos-output-box">
+            <span class="text-dim">Chaos test execution results and logs will display here...</span>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- Bottom Split: Live Saga State Timeline & Database Inspector -->
+      <section class="split-row">
+        
+        <!-- Live Order Projections & Timelines -->
+        <div class="card timeline-panel">
+          <div class="card-header">
+            <h2>📜 CQRS Order Timeline & State Machine</h2>
+            <button class="btn btn-sm btn-secondary" onclick="loadOrderProjections()">🔄 Refresh</button>
+          </div>
+          <div class="orders-list-container" id="orders-list-container">
+            <div class="empty-state">No orders placed yet. Click "Execute Saga Checkout" above!</div>
+          </div>
+        </div>
+
+        <!-- Live Database Tables & Ledger Inspector -->
+        <div class="card db-inspector-panel">
+          <div class="card-header">
+            <h2>🗄️ Database & Outbox Inspector</h2>
+            <div class="tab-buttons">
+              <button class="tab-btn active" data-tab="tab-inventory">Inventory DB</button>
+              <button class="tab-btn" data-tab="tab-payment">Payment DB</button>
+              <button class="tab-btn" data-tab="tab-outbox">Outbox Leases</button>
+            </div>
+          </div>
+          
+          <div class="tab-content active" id="tab-inventory">
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th>Total Stock</th>
+                    <th>Reserved</th>
+                    <th>Available Stock</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-inventory">
+                  <tr><td colspan="4" class="text-center">Loading stock levels...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="tab-content" id="tab-payment">
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Customer ID</th>
+                    <th>Balance</th>
+                    <th>Currency</th>
+                    <th>Last Updated</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-accounts">
+                  <tr><td colspan="4" class="text-center">Loading accounts...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="tab-content" id="tab-outbox">
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Event Type</th>
+                    <th>Aggregate ID</th>
+                    <th>Status</th>
+                    <th>Lease Expires</th>
+                    <th>Retries</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-outbox">
+                  <tr><td colspan="5" class="text-center">Loading outbox records...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+
+      </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <p>Distributed Systems Architecture Lab • Concurrency Isolation, Outbox Relays & Compensation Safety</p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

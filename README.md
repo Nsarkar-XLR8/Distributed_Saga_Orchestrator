@@ -1,0 +1,170 @@
+# ⚡ Distributed Systems Saga Orchestrator & Chaos Resilience Lab
+
+[![Next.js](https://img.shields.io/badge/Next.js-14.2-black?style=flat&logo=next.js)](https://nextjs.org/)
+[![NestJS](https://img.shields.io/badge/NestJS-10.x-ea2849?style=flat&logo=nestjs)](https://nestjs.com/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2-6db33f?style=flat&logo=springboot)](https://spring.io/)
+[![Kafka](https://img.shields.io/badge/Apache%20Kafka-KRaft-231f20?style=flat&logo=apachekafka)](https://kafka.apache.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?style=flat&logo=postgresql)](https://www.postgresql.org/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-7.0-47a248?style=flat&logo=mongodb)](https://www.mongodb.com/)
+
+A production-grade, end-to-end distributed systems reference implementation demonstrating **Event-Driven Architecture**, **Non-Blocking Transactional Outbox Pattern**, **Orchestrated Sagas with Compensating Rollbacks**, **Concurrency Guards with Pessimistic Locking**, **Saga Tombstones (Ghost Reservation Prevention)**, **CQRS Read Projections with Server-Sent Events (SSE)**, and an **Interactive Real-Time Visualizer Dashboard with 1-Click Chaos Engineering**.
+
+---
+
+## 🗺️ System Architecture & Topology
+
+```
+                                          +---------------------------------------------+
+                                          |          Client / Next.js Visualizer        |
+                                          |             (Port 3000 - UI & SSE)          |
+                                          +---------------------+-----------------------+
+                                                                |
+                                             POST /api/v1/orders| (Idempotency-Key)
+                                                                v
+                                          +---------------------+-----------------------+
+                                          |              Order Service                  |
+                                          |     (NestJS • Port 3001 • DB: postgres-order)|
+                                          |      - 2-Phase Outbox Lease Poller          |
+                                          |      - Saga State Machine Orchestrator      |
+                                          |      - Dead Man's Switch Poller             |
+                                          +---------------------+-----------------------+
+                                                                |
+                                        +-----------------------+-----------------------+
+                                        |                 Apache Kafka (KRaft)          |
+                                        |                   Port 9092 / 8080            |
+                                        +-------+-----------------------+---------------+
+                                                |                       |
+                     ReserveInventoryCommand    |                       | InitiatePaymentCommand
+                     ReleaseInventoryCommand    |                       |
+                                                v                       v
+                        +-----------------------+-------+   +-----------+-------------------+
+                        |       Inventory Service       |   |        Payment Service        |
+                        | (Spring Boot 3 • Port 8082)   |   | (Spring Boot 3 • Port 8081)   |
+                        | - Pessimistic Locking         |   | - Double-Entry Ledger Book    |
+                        | - Saga Tombstones Guard       |   | - Concurrency Balance Locking |
+                        | - DB: postgres-inventory      |   | - DB: postgres-payment        |
+                        +-----------------------+-------+   +-----------+-------------------+
+                                                |                       |
+                     InventoryReservedEvent     |                       | PaymentCapturedEvent
+                     InventoryReleasedEvent     |                       | PaymentFailedEvent
+                                                \                       /
+                                                 \                     /
+                                                  v                   v
+                                          +---------------------+-----------------------+
+                                          |        Read Projection Service (CQRS)       |
+                                          |     (NestJS • Port 3002 • DB: mongodb-read)  |
+                                          |      - Atomic Unordered Accumulation        |
+                                          |      - Real-Time Server-Sent Events (SSE)   |
+                                          +---------------------------------------------+
+```
+
+---
+
+## 🛡️ Key Distributed Patterns & Concurrency Guards
+
+| Pattern | Problem Addressed | Implementation Detail |
+|---|---|---|
+| **Non-Blocking Leased Outbox** | Two-phase commit anti-pattern & dual-write data loss | Leased SQL polling with `FOR UPDATE SKIP LOCKED`. Asynchronous Kafka dispatch occurs **outside** open DB transactions to prevent connection pool exhaustion. |
+| **Saga Orchestrator** | Distributed multi-service transaction atomicity | Explicit state machine managing transitions across `CREATED` $\to$ `PAYMENT_PENDING` $\to$ `CONFIRMED` / `COMPENSATING_INVENTORY` $\to$ `CANCELLED`. |
+| **Inversion Guard (Tombstones)** | Out-of-order networks where `ReleaseCommand` arrives before `ReserveCommand` | Wrote `saga_tombstones` row for early release. Late reservation checks tombstone and aborts with `PRE_CANCELLED` without locking stock. |
+| **Double-Entry Ledger** | Financial inconsistency & race conditions | Every debit has a balancing credit entry in the immutable ledger. Customer balances verified with `PESSIMISTIC_WRITE` row locks. |
+| **Dead Man's Switch Poller** | Abandoned sagas due to network partitions | Scheduled poller scans orders with `expires_at < NOW()`, triggering automated rollback compensation. |
+| **Poison Pill Quarantine** | Malformed payloads halting consumer partition processing | Spring Kafka and NestJS error boundaries intercept unrecoverable messages and quarantine them to `*.DLT` without blocking topic offsets. |
+| **Client Ingress Idempotency** | Duplicate HTTP checkouts from network retries | Middleware checks `ingress_idempotency_keys` table and returns cached response in <2ms with zero duplicate DB writes. |
+
+---
+
+## 🚀 Quickstart Guide
+
+### Prerequisites
+- **Node.js**: `v20.x+`
+- **Java**: `OpenJDK 21+`
+- **Maven**: `3.9+`
+- **Docker & Docker Compose** (for multi-container deployment)
+
+### 1. Clone & Setup Environment
+```bash
+git clone https://github.com/<YOUR-USERNAME>/distributed-saga-orchestrator.git
+cd distributed-saga-orchestrator
+cp .env.example .env
+```
+
+### 2. Launch Infrastructure (Docker)
+```bash
+docker-compose up -d
+./scripts/init-kafka-topics.sh  # or powershell -File scripts\init-kafka-topics.ps1
+```
+
+### 3. Launch Services
+
+#### Visualizer Dashboard (Port 3000)
+```bash
+cd services/visualizer-dashboard
+npm install
+npm run dev
+# Open http://localhost:3000
+```
+
+#### Order Service (Port 3001)
+```bash
+cd services/order-service
+npm install
+npm run start:dev
+```
+
+#### Read Projection Service (Port 3002)
+```bash
+cd services/read-projection-service
+npm install
+npm run start:dev
+```
+
+#### Inventory Service (Port 8082)
+```bash
+cd services/inventory-service
+./mvnw spring-boot:run
+```
+
+#### Payment Service (Port 8081)
+```bash
+cd services/payment-service
+./mvnw spring-boot:run
+```
+
+---
+
+## 🧪 1-Click Chaos Engineering Lab
+
+Run the automated verification suite directly from your terminal:
+
+```powershell
+# Windows PowerShell
+powershell -ExecutionPolicy Bypass -File scripts\run-all-chaos-tests.ps1
+```
+
+```bash
+# Linux / macOS Bash
+./scripts/chaos/01_broker_outage.sh
+./scripts/chaos/02_duplicate_event_replay.sh
+./scripts/chaos/03_compensation_inversion.sh
+./scripts/chaos/04_saga_timeout_recovery.sh
+./scripts/chaos/05_high_concurrency_oversell.sh
+./scripts/chaos/06_toxiproxy_latency_resilience.sh
+./scripts/chaos/07_poison_pill_dlt.sh
+./scripts/chaos/08_ingress_idempotency.sh
+```
+
+---
+
+## 🎨 Interactive Live Dashboard
+
+Open **`http://localhost:3000`** in your browser to explore:
+- **Live Architecture Topology**: Animated node pulsing across all microservices.
+- **Interactive Checkout Form**: Test normal checkouts vs insufficient balance rollbacks.
+- **Live Database & Outbox Inspector**: Real-time tabs for stock levels, ledger balances, outbox leases, and saga tombstones.
+- **Resilience & Chaos Controls**: 1-click interactive triggers for race conditions, compensation inversions, and saga dead man's switch timeouts.
+
+---
+
+## 📄 License
+MIT License. Created for distributed systems architecture, resilience engineering, and saga pattern mastery.

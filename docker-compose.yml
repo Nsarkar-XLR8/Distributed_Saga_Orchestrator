@@ -1,0 +1,160 @@
+version: '3.8'
+
+services:
+  # --------------------------------------------------------------------------
+  # Apache Kafka in KRaft Mode (No Zookeeper)
+  # --------------------------------------------------------------------------
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: distributed-kafka
+    ports:
+      - "9092:9092"
+      - "9094:9094"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:29093'
+      KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,PLAINTEXT_HOST://0.0.0.0:9092'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+      CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-cluster cluster-id --bootstrap-server localhost:9092 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - distributed-net
+
+  # --------------------------------------------------------------------------
+  # Provectus Kafka UI (Management & Topic Monitoring)
+  # --------------------------------------------------------------------------
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    container_name: distributed-kafka-ui
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local-kraft-cluster
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      DYNAMIC_CONFIG_ENABLED: 'true'
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - distributed-net
+
+  # --------------------------------------------------------------------------
+  # PostgreSQL: Order Service Database (Port: 5432)
+  # --------------------------------------------------------------------------
+  postgres-order:
+    image: postgres:16-alpine
+    container_name: postgres-order
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${ORDER_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${ORDER_DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${ORDER_DB_NAME:-order_db}
+    volumes:
+      - postgres_order_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${ORDER_DB_USER:-postgres} -d ${ORDER_DB_NAME:-order_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - distributed-net
+
+  # --------------------------------------------------------------------------
+  # PostgreSQL: Inventory Service Database (Port: 5433)
+  # --------------------------------------------------------------------------
+  postgres-inventory:
+    image: postgres:16-alpine
+    container_name: postgres-inventory
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: ${INVENTORY_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${INVENTORY_DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${INVENTORY_DB_NAME:-inventory_db}
+    volumes:
+      - postgres_inventory_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${INVENTORY_DB_USER:-postgres} -d ${INVENTORY_DB_NAME:-inventory_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - distributed-net
+
+  # --------------------------------------------------------------------------
+  # PostgreSQL: Payment Service Database (Port: 5434)
+  # --------------------------------------------------------------------------
+  postgres-payment:
+    image: postgres:16-alpine
+    container_name: postgres-payment
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_USER: ${PAYMENT_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${PAYMENT_DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${PAYMENT_DB_NAME:-payment_db}
+    volumes:
+      - postgres_payment_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PAYMENT_DB_USER:-postgres} -d ${PAYMENT_DB_NAME:-payment_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - distributed-net
+
+  # --------------------------------------------------------------------------
+  # MongoDB: Read Projection CQRS Database (Port: 27017)
+  # --------------------------------------------------------------------------
+  mongodb-read:
+    image: mongo:7.0
+    container_name: mongodb-read
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: ${READ_MODEL_DB_NAME:-read_model_db}
+    volumes:
+      - mongodb_read_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --eval 'db.adminCommand(\"ping\")' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - distributed-net
+
+  # --------------------------------------------------------------------------
+  # Shopify Toxiproxy: Chaos Injection Proxy (API Port: 8474)
+  # --------------------------------------------------------------------------
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.9.0
+    container_name: toxiproxy
+    ports:
+      - "8474:8474"   # API management endpoint
+      - "9093:9093"   # Proxied Kafka listener for chaos testing
+    networks:
+      - distributed-net
+
+networks:
+  distributed-net:
+    driver: bridge
+
+volumes:
+  postgres_order_data:
+  postgres_inventory_data:
+  postgres_payment_data:
+  mongodb_read_data:
