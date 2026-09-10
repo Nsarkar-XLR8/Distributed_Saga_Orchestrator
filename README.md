@@ -80,24 +80,46 @@ A production-grade, end-to-end distributed systems reference implementation demo
 - **Node.js**: `v20.x+`
 - **Java**: `OpenJDK 21+`
 - **Maven**: `3.9+`
-- **Docker & Docker Compose** (for multi-container deployment)
+- **Docker & Docker Compose**
+
+---
 
 ### 1. Clone & Setup Environment
+
 ```bash
-git clone https://github.com/<YOUR-USERNAME>/distributed-saga-orchestrator.git
-cd distributed-saga-orchestrator
+git clone https://github.com/Nsarkar-XLR8/Distributed_Saga_Orchestrator.git
+cd Distributed_Saga_Orchestrator
 cp .env.example .env
 ```
 
+---
+
 ### 2. Launch Infrastructure (Docker)
+
+#### 🐧 On Linux / Ubuntu / macOS:
 ```bash
-docker-compose up -d
-./scripts/init-kafka-topics.sh  # or powershell -File scripts\init-kafka-topics.ps1
+# 1. Start all Docker containers (Kafka KRaft, PostgreSQL dbs, MongoDB, Toxiproxy)
+docker compose up -d   # or docker-compose up -d
+
+# 2. Make scripts executable & provision Kafka topics
+chmod +x ./scripts/*.sh ./scripts/chaos/*.sh
+./scripts/init-kafka-topics.sh
 ```
+
+#### 🪟 On Windows (PowerShell):
+```powershell
+# 1. Start all Docker containers
+docker compose up -d
+
+# 2. Provision Kafka topics
+powershell -ExecutionPolicy Bypass -File scripts\init-kafka-topics.ps1
+```
+
+---
 
 ### 3. Launch Services
 
-#### Visualizer Dashboard (Port 3000)
+#### 🌐 Interactive Visualizer Dashboard (Port 3000)
 ```bash
 cd services/visualizer-dashboard
 npm install
@@ -105,45 +127,46 @@ npm run dev
 # Open http://localhost:3000
 ```
 
-#### Order Service (Port 3001)
+#### 📦 Order Service (Port 3001)
 ```bash
 cd services/order-service
 npm install
 npm run start:dev
 ```
 
-#### Read Projection Service (Port 3002)
+#### 📊 CQRS Read Projection Service (Port 3002)
 ```bash
 cd services/read-projection-service
 npm install
 npm run start:dev
 ```
 
-#### Inventory Service (Port 8082)
+#### 🏭 Inventory Service (Port 8082)
 ```bash
 cd services/inventory-service
-./mvnw spring-boot:run
+mvn spring-boot:run   # or ./mvnw spring-boot:run
 ```
 
-#### Payment Service (Port 8081)
+#### 💳 Payment Service (Port 8081)
 ```bash
 cd services/payment-service
-./mvnw spring-boot:run
+mvn spring-boot:run   # or ./mvnw spring-boot:run
 ```
 
 ---
 
-## 🧪 1-Click Chaos Engineering Lab
+## 🧪 Automated Chaos Engineering Suite
 
-Run the automated verification suite directly from your terminal:
+Run all 8 resilience scenarios directly in your terminal:
 
-```powershell
-# Windows PowerShell
-powershell -ExecutionPolicy Bypass -File scripts\run-all-chaos-tests.ps1
+#### 🐧 On Linux / Ubuntu / macOS:
+```bash
+chmod +x scripts/run-all-chaos-tests.sh
+./scripts/run-all-chaos-tests.sh
 ```
 
+Or run individual scenarios:
 ```bash
-# Linux / macOS Bash
 ./scripts/chaos/01_broker_outage.sh
 ./scripts/chaos/02_duplicate_event_replay.sh
 ./scripts/chaos/03_compensation_inversion.sh
@@ -152,6 +175,11 @@ powershell -ExecutionPolicy Bypass -File scripts\run-all-chaos-tests.ps1
 ./scripts/chaos/06_toxiproxy_latency_resilience.sh
 ./scripts/chaos/07_poison_pill_dlt.sh
 ./scripts/chaos/08_ingress_idempotency.sh
+```
+
+#### 🪟 On Windows (PowerShell):
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run-all-chaos-tests.ps1
 ```
 
 ---
