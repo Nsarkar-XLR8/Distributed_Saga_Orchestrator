@@ -122,7 +122,8 @@ body {
 .header-status-group {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .status-pill {
@@ -136,6 +137,49 @@ body {
   font-size: 12px;
   font-weight: 600;
   color: var(--text-secondary);
+}
+
+.telemetry-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: #f8fafc;
+  border: 1px solid var(--border-medium);
+  border-radius: 20px;
+}
+
+.latency-metric {
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.metric-p50 {
+  background: var(--success-light);
+  color: var(--success-text);
+}
+
+.metric-p95 {
+  background: var(--warning-light);
+  color: var(--warning-text);
+}
+
+.metric-p99 {
+  background: var(--danger-light);
+  color: var(--danger-text);
+}
+
+.duration-tag {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: #f1f5f9;
+  color: #475569;
 }
 
 .status-indicator {

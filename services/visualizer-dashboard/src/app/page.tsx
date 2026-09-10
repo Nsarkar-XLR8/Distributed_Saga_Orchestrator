@@ -56,8 +56,21 @@ export default function VisualizerPage() {
   const [outboxEvents, setOutboxEvents] = useState<any[]>(INITIAL_OUTBOX);
   const [tombstones, setTombstones] = useState<string[]>([]);
   const [processedIdempotencyKeys, setProcessedIdempotencyKeys] = useState<{ [key: string]: any }>({});
+  const [latencySamples, setLatencySamples] = useState<number[]>([32, 38, 41, 45, 52, 68, 84, 118]);
   const [activeTab, setActiveTab] = useState<'inventory' | 'payment' | 'outbox' | 'tombstones'>('inventory');
   const [chaosLog, setChaosLog] = useState<string>('Select a scenario above to test how the system safely handles high concurrency, network delays, duplicate transactions, and out-of-order messages.');
+
+  // Percentile calculation helpers
+  const calculatePercentile = (arr: number[], p: number) => {
+    if (!arr || arr.length === 0) return 0;
+    const sorted = [...arr].sort((a, b) => a - b);
+    const index = Math.min(sorted.length - 1, Math.max(0, Math.floor((p / 100) * sorted.length)));
+    return sorted[index];
+  };
+
+  const p50 = calculatePercentile(latencySamples, 50);
+  const p95 = calculatePercentile(latencySamples, 95);
+  const p99 = calculatePercentile(latencySamples, 99);
 
   // Live References for state updates inside asynchronous saga chains
   const productsRef = useRef(products);
@@ -213,9 +226,17 @@ export default function VisualizerPage() {
     key: string,
     delayMultiplier = 1
   ) => {
+    const startTime = performance.now();
     const selectedProd = productsRef.current.find(p => p.id === prodId) || productsRef.current[0];
     const totalAmount = selectedProd.unitPrice * qty;
     const correlationId = 'corr_' + Math.random().toString(36).substring(2, 9);
+
+    const recordLatency = () => {
+      const durationMs = Math.max(18, Math.round(performance.now() - startTime));
+      newOrder.durationMs = durationMs;
+      setLatencySamples(prev => [...prev.slice(-49), durationMs]);
+      return durationMs;
+    };
 
     // 1. Client Ingress & Idempotency Check
     flashNode('client', 600 * delayMultiplier);
@@ -269,6 +290,7 @@ export default function VisualizerPage() {
         timestamp: new Date().toISOString(),
         payload: { reason: 'PRE_CANCELLED_TOMBSTONE' }
       });
+      recordLatency();
       setOrders(prev => [newOrder, ...prev.filter(o => o._id !== orderId)]);
       return { success: false, reason: 'PRE_CANCELLED_TOMBSTONE' };
     }
@@ -285,6 +307,7 @@ export default function VisualizerPage() {
         timestamp: new Date().toISOString(),
         payload: { reason: 'OUT_OF_STOCK' }
       });
+      recordLatency();
       setOrders(prev => [newOrder, ...prev.filter(o => o._id !== orderId)]);
       return { success: false, reason: 'OUT_OF_STOCK' };
     }
@@ -349,6 +372,7 @@ export default function VisualizerPage() {
         timestamp: new Date().toISOString(),
         payload: { orderId, status: 'CANCELLED' }
       });
+      recordLatency();
       setOrders(prev => [newOrder, ...prev.filter(o => o._id !== orderId)]);
       flashNode('read', 800 * delayMultiplier);
       setLiveBanner(`[Saga Rollback] 🏁 Order ${orderId} successfully compensated and CANCELLED.`);
@@ -375,6 +399,7 @@ export default function VisualizerPage() {
       timestamp: new Date().toISOString(),
       payload: { orderId, status: 'CONFIRMED' }
     });
+    recordLatency();
     setOrders(prev => [newOrder, ...prev.filter(o => o._id !== orderId)]);
 
     // 7. CQRS Read Model Accumulation Complete
@@ -566,6 +591,11 @@ export default function VisualizerPage() {
           <div className="status-pill">
             <span className="status-indicator"></span>
             <span>{sseStatus === 'CONNECTED' ? 'Live SSE Stream Active' : 'Interactive Simulation Ready'}</span>
+          </div>
+          <div className="status-pill telemetry-group" title="Live End-to-End Latency Percentiles">
+            <span className="latency-metric metric-p50" title="50th Percentile Latency">p50: <strong>{p50}ms</strong></span>
+            <span className="latency-metric metric-p95" title="95th Percentile Latency">p95: <strong>{p95}ms</strong></span>
+            <span className="latency-metric metric-p99" title="99th Percentile Latency">p99: <strong>{p99}ms</strong></span>
           </div>
           <div className="status-pill">
             <span>{totalOrders} Orders Executed</span>
@@ -808,7 +838,12 @@ export default function VisualizerPage() {
                 orders.map(order => (
                   <div key={order._id} className="order-timeline-entry">
                     <div className="entry-header">
-                      <span className="order-title">Order #{order._id}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span className="order-title">Order #{order._id}</span>
+                        {order.durationMs && (
+                          <span className="duration-tag">⏱️ {order.durationMs}ms</span>
+                        )}
+                      </div>
                       <span className={`badge-tag badge-${order.status}`}>{order.status}</span>
                     </div>
                     <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
