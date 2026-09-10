@@ -26,6 +26,7 @@ target/
 !.env.example
 
 # IDE & Editor files
+.vscode/
 .idea/
 *.iml
 *.sublime-project
@@ -35,6 +36,11 @@ target/
 .settings/
 .DS_Store
 Thumbs.db
+
+# Internal Planning & Execution docs
+PLAN.md
+TODO.md
+ARCHITECTURE.md
 
 # Logs & Temp files
 *.log

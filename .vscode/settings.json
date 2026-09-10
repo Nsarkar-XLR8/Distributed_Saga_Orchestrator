@@ -1,9 +1,0 @@
-{
-  "java.configuration.updateBuildConfiguration": "automatic",
-  "java.import.maven.enabled": true,
-  "java.import.maven.searchLevels": 5,
-  "java.autobuild.enabled": true,
-  "java.compile.nullAnalysis.mode": "automatic",
-  "java.maven.downloadSources": true,
-  "java.project.importOnFirstTimeStartup": "automatic"
-}
