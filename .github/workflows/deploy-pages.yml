@@ -1,0 +1,86 @@
+name: Deploy Visualizer to GitHub Pages & CI
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Verify Spring Boot Inventory Service Build
+        run: |
+          cd services/inventory-service
+          mvn clean compile -DskipTests
+
+      - name: Verify Spring Boot Payment Service Build
+        run: |
+          cd services/payment-service
+          mvn clean compile -DskipTests
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            services/order-service/package-lock.json
+            services/read-projection-service/package-lock.json
+            services/visualizer-dashboard/package-lock.json
+
+      - name: Build Order Service
+        run: |
+          cd services/order-service
+          npm ci
+          npm run build
+
+      - name: Build Read Projection Service
+        run: |
+          cd services/read-projection-service
+          npm ci
+          npm run build
+
+      - name: Build Visualizer Dashboard Static Export
+        run: |
+          cd services/visualizer-dashboard
+          npm ci
+          npm run build
+
+      - name: Setup GitHub Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload Pages Artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'services/visualizer-dashboard/out'
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build-and-verify
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
