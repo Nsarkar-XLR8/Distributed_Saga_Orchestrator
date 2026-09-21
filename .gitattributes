@@ -1,0 +1,20 @@
+# ==============================================================================
+# GitHub Linguist Configuration
+# Highlight Backend Services: Spring Boot (Java) & NestJS (TypeScript)
+# ==============================================================================
+
+# Vendor the frontend visualizer dashboard so it does not distort backend language stats
+services/visualizer-dashboard/** linguist-vendored=true
+services/visualizer-dashboard/public/** linguist-vendored=true
+
+# Mark chaos engineering and helper scripts as documentation/automation
+scripts/** linguist-documentation=true
+
+# Mark SQL migration and seed scripts as documentation/data
+services/order-service/src/database/init.sql linguist-documentation=true
+
+# Explicitly ensure core Spring Boot (Java) and NestJS (TypeScript) services are detected
+services/inventory-service/** linguist-detectable=true
+services/payment-service/** linguist-detectable=true
+services/order-service/** linguist-detectable=true
+services/read-projection-service/** linguist-detectable=true
